@@ -1,0 +1,219 @@
+﻿HARTZAILEA
+#include <WiFi.h>
+#include <WiFiMulti.h>
+
+
+#include <HTTPClient.h>
+
+
+#define USE_SERIAL Serial
+
+
+WiFiMulti wifiMulti;
+String topostring;
+
+
+
+
+
+
+
+
+
+
+#include <SPI.h>
+#include <LoRa.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     9 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+
+#define ss 27
+#define rst 26
+#define dio0 13
+char url[135];
+
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+  pinMode(2, OUTPUT);
+  Serial.println("siem");
+  Serial.println(topostring);
+  Serial.println("siem");
+  
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  
+  
+  Serial.println("LoRa Receiver Callback");
+
+
+  LoRa.setPins(ss, rst, dio0);
+      for(uint8_t t = 4; t > 0; t--) {
+        USE_SERIAL.printf("[SETUP] WAIT %d...\n", t);
+        USE_SERIAL.flush();
+        delay(1000);
+    }
+
+
+    wifiMulti.addAP("AndroidAP", "xabigoya");
+    Serial.println( "wifira konektatua");
+
+
+
+
+  if (!LoRa.begin(915E6)) {
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+  
+  display.display();
+  delay(2);
+  display.clearDisplay();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  LoRa.onReceive(onReceive);
+
+
+    
+     
+   
+   
+  
+     
+}
+
+
+void loop() {
+
+
+     // register the receive callback
+
+
+ LoRa.receive();
+
+
+ delay (2000);
+ Serial.println("siem");
+ Serial.println(topostring);
+ // topostring.toCharArray(url, 180);
+ // Serial.println(url);
+ topollution();
+// topostring=" ";
+}  
+void onReceive(int packetSize) {
+  
+  // received a packet
+  Serial.print("Received packet '");
+delay (8000);
+  
+  while (LoRa.available()) {
+    topostring += (char)LoRa.read();
+  }
+  
+  Serial.print("((");
+  Serial.print(topostring);
+ Serial.print("))");
+   delay(8000);
+   
+  // print RSSI of packet
+  Serial.print("' with RSSI ");
+  Serial.println(LoRa.packetRssi());
+  static int blink;
+  digitalWrite(2, blink);
+  blink = ~blink;
+delay (1000);
+
+
+}
+
+
+
+
+
+
+void topollution()  {
+
+
+// char url[]="https://topollution.herokuapp.com/api/device?device_id=2&latitud=43.315458&longitud=-1.912590&dbs=76&co2=591&co=2&net=lora&bateria=7.4";
+  //   topostring += String(url);
+ 
+
+
+  // put the radio into receive mode
+  
+  if((wifiMulti.run() == WL_CONNECTED)) {
+
+
+        HTTPClient http;
+        Serial.println("baba");
+        Serial.println(topostring);
+        Serial.println("http://topollution.herokuapp.com/api/device?device_id=2&latitud=43.315458&longitud=-1.912590&dbs=76&co2=591&co=2&net=lora&bateria=7.4");
+        USE_SERIAL.print("[HTTP] begin...\n");
+        // configure traged server and url
+        //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
+
+
+        
+        http.begin(topostring); //HTTP
+
+
+        USE_SERIAL.print("[HTTP] GET...\n");
+        // start connection and send HTTP header
+        int httpCode = http.GET();
+
+
+        // httpCode will be negative on error
+        if(httpCode > 0) {
+            // HTTP header has been send and Server response header has been handled
+            USE_SERIAL.printf("[HTTP] GET... code: %d\n", httpCode);
+
+
+            // file found at server
+            if(httpCode == HTTP_CODE_OK) {
+                String payload = http.getString();
+                USE_SERIAL.println(payload);
+            }
+        } else {
+            USE_SERIAL.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
+delay(8000);
+        http.end();
+    }
+
+
+
+
+
+
+    
+
+
+    
+}

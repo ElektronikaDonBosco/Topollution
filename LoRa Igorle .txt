@@ -1,0 +1,288 @@
+﻿IGORLEA
+
+
+#include <SPI.h>
+#include <LoRa.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET     9 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+
+#define ss 27
+#define rst 26
+#define dio0 22
+int counter = 0;
+
+
+
+
+//Co2 sentsorea
+#define anInput     39                        //analog feed from 
+#define co2Zero     55                        //calibrated CO2 0 level
+int co2now[10];                               //int array for co2 readings
+int co2raw = 0;                               //int for raw value of co2
+int co2comp = 0;                              //int for compensated co2 
+int co2ppm = 0;                               //int for calculated ppm
+int zzz = 0;                                  //int for averaging
+
+
+// Mikrofonoa
+int microphonValue = 0;
+int n_Samples = 1000; // numero de muestras para promediar
+int sensorValueEskala = 0;
+int sensorValue = 0;
+
+
+
+
+//Lipoaren karga
+#define lipoInput     34                        
+
+
+// CO2
+
+
+
+
+//CO
+const int MQ_PIN = A0;      // Pin del sensor
+const int RL_VALUE = 5;      // Resistencia RL del modulo en Kilo ohms
+const int R0 = 3.65;          // Resistencia R0 del sensor en Kilo ohms
+ 
+// Datos para lectura multiple
+const int READ_SAMPLE_INTERVAL = 50;    // Tiempo entre muestras
+const int READ_SAMPLE_TIMES = 3;       // Numero muestras
+ 
+// Ajustar estos valores para vuestro sensor según el Datasheet
+// (opcionalmente, según la calibración que hayáis realizado)
+const float X0 = 3;
+const float Y0 = 2.9;
+const float X1 = 50;
+const float Y1 = 1.6;
+ 
+// Puntos de la curva de concentración {X, Y}
+const float punto0[] = { log10(X0), log10(Y0) };
+const float punto1[] = { log10(X1), log10(Y1) };
+ 
+// Calcular pendiente y coordenada abscisas
+const float scope = (punto1[1] - punto0[1]) / (punto1[0] - punto0[0]);
+const float coord = punto0[1] - punto0[0] * scope;
+ 
+
+
+
+
+void setup() {
+  Serial.begin(115200);
+   pinMode(anInput,INPUT); //input para CO2                     
+   pinMode(MQ_PIN,INPUT);  //input para CO
+   pinMode(lipoInput,INPUT); //input para lectura de bateria
+  
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  // iniciar LoRa
+  while (!Serial);
+  Serial.println("LoRa Sender");
+  LoRa.setPins(ss, rst, dio0);
+    if (!LoRa.begin(915E6)) {
+    Serial.println("Starting LoRa failed!");
+    delay(100);
+    while (1);
+  }
+  //confugurar display LCD
+  display.display();
+  delay(2);
+  display.clearDisplay();
+}
+
+
+void loop() {
+  Serial.print("Sending packet: ");
+  Serial.println(counter);    //Numero del paquete
+  counter++;      //suma para siguiente paquete
+  delay(8000);
+
+
+
+
+  
+  //Lipo
+   int adc= analogRead(lipoInput);//Letctura
+   float Vbat= (adc/485.9); // Conversion
+   Serial.print(Vbat);  //Valor en V
+   Serial.println( "V   bateria");
+
+
+   // CO
+   float rs_med = readMQ(MQ_PIN);      // Obtener la Rs promedio
+   float concentrationX = getConcentration((rs_med/R0));   
+   float concentration = (concentrationX*0.02); // Obtener la concentración
+   
+   // Mostrar el valor de la concentración por serial
+   Serial.print("CO: ");
+   Serial.print(concentration);   //Nivel de CO2 en ppm
+   Serial.print("ppm");   
+   Serial.println("");
+   delay(8000);
+
+
+   CO2();
+ 
+
+
+  
+  //----------------------------------------
+  
+ 
+
+
+ float batezBestekoa = getbatezBestekoa (n_Samples);  //Realizar lectura media del ruido
+  //Serial.print ("sensorValueEskala: ");
+  //Serial.println (sensorValueEskala);
+  Serial.println ("batezBestekoa: ");
+  Serial.println (batezBestekoa);     //media del ruido
+int dB_tan = 20 * log (batezBestekoa);    //conversion del ruido a dB
+  Serial.println ("dB_tan: ");
+  Serial.println (dB_tan);      //Nivel de ruido en dB
+ 
+
+
+
+
+
+
+  
+  
+  // Enviar paquete LoRa al receptor
+  LoRa.beginPacket();
+    LoRa.print("dB ");
+  LoRa.print(dB_tan);
+  LoRa.print("CO ");
+  LoRa.print(concentration);
+  LoRa.print("CO2 ");
+  LoRa.print(co2ppm);
+  LoRa.endPacket();
+
+
+  /* Visualizacion en display
+  
+  display.clearDisplay();
+  display.setTextSize(2);             // Normal 1:1 pixel scale
+  display.setTextColor(WHITE);        // Draw white text
+  display.setCursor(0,0);             // Start at top-left corner
+  display.println(F("Topolution"));
+  display.setCursor(0,17); 
+  display.print(concentration);
+  display.setCursor(60,34);
+  display.print(dB_tan);
+  display.setCursor(60,51);
+  display.print(co2ppm);
+  display.display();
+  delay(8000);*/
+  //delay(60000);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+// Obtener la resistencia promedio en N muestras
+float readMQ(int mq_pin)
+{
+   float rs = 0;
+   for (int i = 0;i<READ_SAMPLE_TIMES;i++) {
+      rs += getMQResistance(analogRead(mq_pin));
+      delay(READ_SAMPLE_INTERVAL);
+   }
+   return rs / READ_SAMPLE_TIMES;
+}
+ 
+// Obtener resistencia a partir de la lectura analogica
+float getMQResistance(int raw_adc)
+{
+   return (((float)RL_VALUE / 1000.0*(1023 - raw_adc) / raw_adc));
+}
+ 
+// Obtener concentracion 10^(coord + scope * log (rs/r0)
+float getConcentration(float rs_ro_ratio)
+{
+   return pow(10, coord + scope * log(rs_ro_ratio));
+
+
+}
+
+
+void CO2(){
+  
+    int co2ppm = 0;
+      for (int x = 0;x<9;x++){                   //samplpe co2 10x over 2 seconds
+        co2now[x]=analogRead(anInput);
+        delay(200);
+     }
+    int zzz = 0;
+      for (int x = 0;x<9;x++){                     //add samples together
+        zzz=zzz + co2now[1];
+  }
+   co2raw = zzz/9;                            //divide samples by 10
+   co2comp = co2raw - co2Zero;                 //get compensated value
+   co2ppm = map(co2comp,1619,0,400,2000);      //map value for atmospheric levels
+
+
+  Serial.print("   CO2");               //print title
+  Serial.print(" ");                       //skip a line
+  Serial.println(co2ppm);   //print co2 ppm
+  }
+
+
+
+
+
+
+
+
+float getbatezBestekoa(int n) { // hacemos "n" mediciones
+ 
+ float SUMA_n = 0;
+ for (int i = 0; i < n; i++) { 
+
+
+  sensorValue = analogRead(A0);   //Lectura del sonido
+
+
+  //alternoa DC-ra pasa (errektifikatu)
+  if (sensorValue < 248){
+    sensorValue = (248-sensorValue) + 248;
+  }
+  
+  //sensorValue bariblea 0 eta 255 artean mapeatzea
+  sensorValueEskala = map (sensorValue, 248, 490, 0, 255);
+  
+  
+ SUMA_n += sensorValueEskala;
+ }
+ return( SUMA_n /n); // Promedio
+}
