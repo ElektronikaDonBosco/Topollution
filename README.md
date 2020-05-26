@@ -39,9 +39,9 @@
 ##### 8.1.2.SENSORES/SENTSOREAK
 ##### 8.1.3.FUENTE DE ALIMENTACIÓN/ELIKATZE ITURRIA
 ### PLANO/PLANOA
-#### Esquema eléctrico/Eskema elektrikoa
+### Esquema eléctrico/Eskema elektrikoa
 ##### Dispositivo SIM 808
 ##### Dispositivo LoRa
-#### Esquema de los planos/Planoen eskema
+### Esquema de los planos/Planoen eskema
 ##### Dispositivo SIM 808
 ##### Dispositivo LoRa
